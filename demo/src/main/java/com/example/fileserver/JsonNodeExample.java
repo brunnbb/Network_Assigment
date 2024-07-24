@@ -19,10 +19,12 @@ public class JsonNodeExample {
             String name = jsonNode.get("name").asText();
             int age = jsonNode.get("age").asInt();
             String city = jsonNode.get("city").asText();
+            String weight = jsonNode.has("weight") ? jsonNode.get("weight").asText() : " ";
 
             System.out.println("Name: " + name);
             System.out.println("Age: " + age);
             System.out.println("City: " + city);
+            System.out.println("Weight: " + weight);
 
             // Criar um novo objeto JSON usando ObjectNode
             JsonNode newNode = objectMapper.createObjectNode()
