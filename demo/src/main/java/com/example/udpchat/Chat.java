@@ -65,7 +65,7 @@ class Listener {
                 }
 
                 // To extract data and display it
-                data = new String(packet.getData());
+                data = new String(packet.getData(), 0, packet.getLength());
                 JsonNode jsonNode = objectMapper.readTree(data);
                 time = jsonNode.get("time").asText();
                 date = jsonNode.get("date").asText();
