@@ -22,11 +22,15 @@ public class TcpClient {
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             DataInputStream in = new DataInputStream(socket.getInputStream());
 
-            int command;
             while (true) {
+                int command = 0;
+                try {
+                    showCommandMenu();
+                    command = Integer.parseInt(input.nextLine());
 
-                showCommandMenu();
-                command = Integer.parseInt(input.nextLine());
+                } catch (NumberFormatException e) {
+                    System.err.println("Please, type in one of the numbers of the menu");
+                }
 
                 switch (command) {
                     case (1):
@@ -43,7 +47,7 @@ public class TcpClient {
                         out.flush();
                         break;
                     default:
-                        System.out.println("Unknown command");
+                        System.out.println("Choose: Unknown command");
                         break;
                 }
 
@@ -116,18 +120,23 @@ public class TcpClient {
 
         File fileToSend = new File(clientFilePath + "\\" + fileName);
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToSend))) {
+            long fileSize = fileToSend.length();
 
             JsonNode payload = mapper.createObjectNode()
                     .put("command", "put")
                     .put("file", fileName)
-                    .put("hash", hashFile(fileName));
+                    .put("hash", hashFile(fileName))
+                    .put("size", fileSize);
+
             out.writeUTF(mapper.writeValueAsString(payload));
+            out.flush();
 
             int retries = 0;
             String status = "fail";
 
-            while (retries < 3) {
-                byte[] buffer = new byte[8192];
+            while (retries < 5) {
+
+                byte[] buffer = new byte[4096];
                 int byteRead;
 
                 while ((byteRead = bis.read(buffer)) > 0) {
@@ -135,14 +144,17 @@ public class TcpClient {
                 }
                 out.flush();
 
+                System.out.println("File " + fileName + " sent, awaiting confirmation...");
+
                 JsonNode response = mapper.readTree(in.readUTF());
-                if (response.get("status").asText().equals("success")) {
-                    status = "success";
+                status = response.get("status").asText();
+
+                if (status.equals("success")) {
                     break;
                 } else {
                     retries++;
+                    System.out.println("Retrying to send file " + fileName + " to server");
                 }
-
             }
 
             if (status.equals("success")) {
@@ -174,21 +186,27 @@ public class TcpClient {
                     .put("command", "get")
                     .put("file", fileName);
             out.writeUTF(mapper.writeValueAsString(payload));
+            out.flush();
 
             JsonNode response = mapper.readTree(in.readUTF());
             String receivedHash = response.get("hash").asText();
+            long fileSize = response.get("size").asLong();
 
             int retries = 0;
             String status = "fail";
 
-            while (retries < 3) {
-                byte[] buffer = new byte[8192];
+            while (retries < 5) {
+                byte[] buffer = new byte[4096];
                 int byteRead;
+                long totalBytesRead = 0;
 
-                while (in.available() > 0 && (byteRead = in.read(buffer)) != -1) {
+                while (totalBytesRead < fileSize && ((byteRead = in.read(buffer)) > 0)) {
                     bos.write(buffer, 0, byteRead);
+                    totalBytesRead += byteRead;
                 }
                 bos.flush();
+
+                System.out.println("File " + fileName + " received, verifying hash...");
 
                 String calculatedHash = hashFile(fileName);
                 if (receivedHash.equals(calculatedHash)) {
@@ -202,7 +220,7 @@ public class TcpClient {
                     break;
                 } else {
                     retries++;
-                    if (retries < 3) {
+                    if (retries < 5) {
                         System.out.println("Retrying to get file " + fileName + " from server");
                         JsonNode confirmation = mapper.createObjectNode()
                                 .put("file", fileName)
@@ -211,6 +229,7 @@ public class TcpClient {
                         out.writeUTF(mapper.writeValueAsString(confirmation));
                         out.flush();
                     }
+
                 }
 
             }

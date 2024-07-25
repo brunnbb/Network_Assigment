@@ -66,21 +66,26 @@ class ClientHandler extends Thread {
     }
 
     // Vai receber um arquivo, com o in
-    public void receiveFile(String fileName, String hash) {
+    public void receiveFile(String fileName, String hash, Long fileSize) {
         File fileToReceive = new File(serverFilePath + "\\" + fileName);
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(fileToReceive))) {
 
             int retries = 0;
             String status = "fail";
 
-            while (retries < 3) {
-                byte[] buffer = new byte[8192];
+            while (retries < 5) {
+                byte[] buffer = new byte[4096];
                 int byteRead;
+                long totalBytesRead = 0;
 
-                while (in.available() > 0 && (byteRead = in.read(buffer)) != -1) {
+                while (totalBytesRead < fileSize && ((byteRead = in.read(buffer))) > 0) {
                     bos.write(buffer, 0, byteRead);
+                    totalBytesRead += byteRead;
                 }
                 bos.flush();
+
+                System.out.println(
+                        "[SERVER] File " + fileName + " received from Client " + clientNumber + ", verifying hash...");
 
                 String calculatedHash = hashFile(fileName);
                 if (hash.equals(calculatedHash)) {
@@ -94,8 +99,8 @@ class ClientHandler extends Thread {
                     break;
                 } else {
                     retries++;
-                    if (retries < 3) {
-                        System.out.println("[SERVER] Retrying to receive file "
+                    if (retries < 5) {
+                        System.out.println("[SERVER] Fail with hash, retrying to receive file "
                                 + fileName + " from Client " + clientNumber);
                         JsonNode payload = objectMapper.createObjectNode()
                                 .put("file", fileName)
@@ -108,9 +113,11 @@ class ClientHandler extends Thread {
             }
 
             if (status.equals("success")) {
-                System.out.println("[SERVER] File " + fileName + " received from Client " + clientNumber);
+                System.out.println("[SERVER] File " + fileName + " successfully received from Client " + clientNumber);
             } else {
-                System.out.println("[SERVER] Failed to receive : " + fileName + " from Client " + clientNumber);
+                System.out
+                        .println("[SERVER] Failed to successfully receive file: " + fileName + " from Client "
+                                + clientNumber);
             }
 
         } catch (IOException e) {
@@ -122,11 +129,13 @@ class ClientHandler extends Thread {
     public void sendFile(String fileName) {
         File fileToSend = new File(serverFilePath + "\\" + fileName);
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToSend))) {
+            long fileSize = fileToSend.length();
 
             JsonNode payload = objectMapper.createObjectNode()
                     .put("file", fileName)
                     .put("operation", "get")
-                    .put("hash", hashFile(fileName));
+                    .put("hash", hashFile(fileName))
+                    .put("size", fileSize);
 
             out.writeUTF(objectMapper.writeValueAsString(payload));
             out.flush();
@@ -134,21 +143,23 @@ class ClientHandler extends Thread {
             int retries = 0;
             String status = "fail";
 
-            while (retries < 3) {
+            while (retries < 5) {
 
-                byte[] buffer = new byte[8192];
+                byte[] buffer = new byte[4096];
                 int byteRead;
 
-                while ((byteRead = bis.read(buffer)) > 0) {
+                while (((byteRead = bis.read(buffer)) > 0)) {
                     out.write(buffer, 0, byteRead);
                 }
                 out.flush();
 
+                System.out.println(
+                        "[SERVER] File " + fileName + " sent to Client " + clientNumber + ", awaiting confirmation...");
+
                 JsonNode response = objectMapper.readTree(in.readUTF());
                 status = response.get("status").asText();
 
-                if (response.get("status").asText().equals("success")) {
-                    status = "sucess";
+                if (status.equals("success")) {
                     break;
                 } else {
                     retries++;
@@ -157,9 +168,10 @@ class ClientHandler extends Thread {
             }
 
             if (status.equals("success")) {
-                System.out.println("[SERVER] File " + fileName + " sent to Client " + clientNumber);
+                System.out.println("[SERVER] File " + fileName + " successfully sent to Client " + clientNumber);
             } else {
-                System.out.println("[SERVER] Failed to sent file : " + fileName + " to Client " + clientNumber);
+                System.out.println(
+                        "[SERVER] Failed to successfully send file : " + fileName + " to Client " + clientNumber);
             }
 
         } catch (IOException e) {
@@ -186,6 +198,7 @@ class ClientHandler extends Thread {
     @Override
     public void run() {
         String command, fileName, hash;
+        Long fileSize;
         try {
             out = new DataOutputStream(socket.getOutputStream());
             in = new DataInputStream(socket.getInputStream());
@@ -196,6 +209,7 @@ class ClientHandler extends Thread {
                 command = jsonNode.get("command").asText();
                 fileName = jsonNode.has("file") ? jsonNode.get("file").asText() : " ";
                 hash = jsonNode.has("hash") ? jsonNode.get("hash").asText() : " ";
+                fileSize = jsonNode.has("size") ? jsonNode.get("size").asLong() : 0;
 
                 switch (command) {
                     case "list":
@@ -203,7 +217,7 @@ class ClientHandler extends Thread {
                         out.flush();
                         break;
                     case "put":
-                        receiveFile(fileName, hash);
+                        receiveFile(fileName, hash, fileSize);
                         break;
                     case "get":
                         sendFile(fileName);
