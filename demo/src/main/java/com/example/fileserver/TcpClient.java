@@ -127,7 +127,7 @@ public class TcpClient {
             String status = "fail";
 
             while (retries < 3) {
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int byteRead;
 
                 while ((byteRead = bis.read(buffer)) > 0) {
@@ -182,7 +182,7 @@ public class TcpClient {
             String status = "fail";
 
             while (retries < 3) {
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int byteRead;
 
                 while (in.available() > 0 && (byteRead = in.read(buffer)) != -1) {
@@ -192,7 +192,6 @@ public class TcpClient {
 
                 String calculatedHash = hashFile(fileName);
                 if (receivedHash.equals(calculatedHash)) {
-                    System.out.println("Retrying to send file " + fileName + "to server");
                     JsonNode confirmation = mapper.createObjectNode()
                             .put("file", fileName)
                             .put("operation", "get")
@@ -204,7 +203,7 @@ public class TcpClient {
                 } else {
                     retries++;
                     if (retries < 3) {
-                        System.out.println("Retrying to send file " + fileName + "to server");
+                        System.out.println("Retrying to get file " + fileName + " from server");
                         JsonNode confirmation = mapper.createObjectNode()
                                 .put("file", fileName)
                                 .put("operation", "get")

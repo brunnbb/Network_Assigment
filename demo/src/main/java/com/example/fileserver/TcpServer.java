@@ -74,7 +74,7 @@ class ClientHandler extends Thread {
             String status = "fail";
 
             while (retries < 3) {
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int byteRead;
 
                 while (in.available() > 0 && (byteRead = in.read(buffer)) != -1) {
@@ -129,30 +129,32 @@ class ClientHandler extends Thread {
                     .put("hash", hashFile(fileName));
 
             out.writeUTF(objectMapper.writeValueAsString(payload));
+            out.flush();
 
-            int retries = -1;
-            String status;
+            int retries = 0;
+            String status = "fail";
 
-            do {
-                if (retries > -1) {
-                    System.out.println("[SERVER] Retrying to send file " + fileName + " to Client " + clientNumber);
-                }
+            while (retries < 3) {
 
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int byteRead;
 
-                // Envia o arquivo em pedaços de 1024
                 while ((byteRead = bis.read(buffer)) > 0) {
                     out.write(buffer, 0, byteRead);
                 }
                 out.flush();
 
-                // Aguarda confirmação de recebimento do cliente
                 JsonNode response = objectMapper.readTree(in.readUTF());
                 status = response.get("status").asText();
-                retries++;
 
-            } while (status.equals("fail") && retries < 3);
+                if (response.get("status").asText().equals("success")) {
+                    status = "sucess";
+                    break;
+                } else {
+                    retries++;
+                    System.out.println("[SERVER] Retrying to send file " + fileName + " to Client " + clientNumber);
+                }
+            }
 
             if (status.equals("success")) {
                 System.out.println("[SERVER] File " + fileName + " sent to Client " + clientNumber);
@@ -198,6 +200,7 @@ class ClientHandler extends Thread {
                 switch (command) {
                     case "list":
                         out.writeUTF(listFiles());
+                        out.flush();
                         break;
                     case "put":
                         receiveFile(fileName, hash);
@@ -218,7 +221,8 @@ class ClientHandler extends Thread {
         } catch (JsonProcessingException e) {
             System.out.println("[SERVER] Error trying to process a Json: " + e.getMessage());
         } catch (IOException e) {
-            System.out.println("[SERVER] Error in establishing a conection: " + e.getMessage());
+            System.out.println(
+                    "[SERVER] Error in establishing a conection with client " + clientNumber + ": " + e.getMessage());
         } finally {
             try {
                 in.close();
