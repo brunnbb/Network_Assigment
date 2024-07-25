@@ -12,10 +12,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class TcpServer {
 
     public static void main(String[] args) {
-        try {
-            ServerSocket serverSocket = new ServerSocket(6777);
+        try (ServerSocket serverSocket = new ServerSocket(6777)) {
             int counter = 0;
-            System.out.println("[SERVER] Wainting for client connection...");
+            System.out.println("------------------------------------------------------");
+            System.out.println("[SERVER] Waiting for a client connection...");
+            System.out.println("------------------------------------------------------");
             while (true) {
                 Socket socket = serverSocket.accept();
                 counter++;
@@ -24,7 +25,7 @@ public class TcpServer {
                 clientHandler.start();
             }
         } catch (IOException e) {
-            System.out.println("[SERVER] Fatal error, shutingdown");
+            System.out.println("[SERVER] Fatal error, shuting down");
             System.exit(0);
         }
     }
@@ -32,7 +33,7 @@ public class TcpServer {
 
 class ClientHandler extends Thread {
     private Socket socket;
-    private int clienteNumber;
+    private int clientNumber;
     private DataOutputStream out;
     private DataInputStream in;
     private static String serverFilePath = "demo\\src\\main\\java\\com\\example\\fileserver\\serverfiles";
@@ -40,21 +41,28 @@ class ClientHandler extends Thread {
 
     // Inicializa o socket e o objectMapper(Para formatar e ler as mensagems como
     // objetos json)
-    public ClientHandler(Socket socket, int clienteNumber) {
+    public ClientHandler(Socket socket, int clientNumber) {
         this.socket = socket;
-        this.clienteNumber = clienteNumber;
+        this.clientNumber = clientNumber;
         ClientHandler.objectMapper = new ObjectMapper();
     }
 
     // Retorna um hash MD5
-    public String hashFile(String fileName) throws IOException, NoSuchAlgorithmException {
+    public String hashFile(String fileName) {
         byte[] fileToBytes;
-        fileToBytes = Files.readAllBytes(Paths.get(serverFilePath + "\\" + fileName));
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] messageDigest = md.digest(fileToBytes);
-        BigInteger bigInteger = new BigInteger(1, messageDigest);
-        return bigInteger.toString(16);
-
+        try {
+            fileToBytes = Files.readAllBytes(Paths.get(serverFilePath + "\\" + fileName));
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] messageDigest = md.digest(fileToBytes);
+            BigInteger bigInteger = new BigInteger(1, messageDigest);
+            return bigInteger.toString(16);
+        } catch (IOException e) {
+            System.out.println("[SERVER] Error in reading the file for hashing: " + e.getMessage());
+            return null;
+        } catch (NoSuchAlgorithmException e) {
+            System.out.println("[SERVER] Error in hashing the file: " + e.getMessage());
+            return null;
+        }
     }
 
     // Vai receber um arquivo, com o in
@@ -62,11 +70,47 @@ class ClientHandler extends Thread {
         File fileToReceive = new File(serverFilePath + "\\" + fileName);
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(fileToReceive))) {
 
-            byte[] buffer = new byte[1024];
-            int byteRead;
+            int retries = 0;
+            String status = "fail";
 
-            while ((byteRead = in.read(buffer)) != -1) {
-                bos.write(buffer, 0, byteRead);
+            while (retries < 3) {
+                byte[] buffer = new byte[4096];
+                int byteRead;
+
+                while (in.available() > 0 && (byteRead = in.read(buffer)) != -1) {
+                    bos.write(buffer, 0, byteRead);
+                }
+                bos.flush();
+
+                String calculatedHash = hashFile(fileName);
+                if (hash.equals(calculatedHash)) {
+                    JsonNode payload = objectMapper.createObjectNode()
+                            .put("file", fileName)
+                            .put("operation", "put")
+                            .put("status", "success");
+                    out.writeUTF(objectMapper.writeValueAsString(payload));
+                    out.flush();
+                    status = "success";
+                    break;
+                } else {
+                    retries++;
+                    if (retries < 3) {
+                        System.out.println("[SERVER] Retrying to receive file "
+                                + fileName + " from Client " + clientNumber);
+                        JsonNode payload = objectMapper.createObjectNode()
+                                .put("file", fileName)
+                                .put("operation", "put")
+                                .put("status", "fail");
+                        out.writeUTF(objectMapper.writeValueAsString(payload));
+                        out.flush();
+                    }
+                }
+            }
+
+            if (status.equals("success")) {
+                System.out.println("[SERVER] File " + fileName + " received from Client " + clientNumber);
+            } else {
+                System.out.println("[SERVER] Failed to receive : " + fileName + " from Client " + clientNumber);
             }
 
         } catch (IOException e) {
@@ -91,10 +135,10 @@ class ClientHandler extends Thread {
 
             do {
                 if (retries > -1) {
-                    System.out.println("[SERVER] Retrying to send file " + fileName + " to Client" + clienteNumber);
+                    System.out.println("[SERVER] Retrying to send file " + fileName + " to Client " + clientNumber);
                 }
 
-                byte[] buffer = new byte[1024];
+                byte[] buffer = new byte[4096];
                 int byteRead;
 
                 // Envia o arquivo em pedaços de 1024
@@ -111,15 +155,13 @@ class ClientHandler extends Thread {
             } while (status.equals("fail") && retries < 3);
 
             if (status.equals("success")) {
-                System.out.println("[SERVER] File " + fileName + "sent to Client " + clienteNumber);
+                System.out.println("[SERVER] File " + fileName + " sent to Client " + clientNumber);
             } else {
-                System.out.println("[SERVER] Failed to sent file : " + fileName + " to Client " + clienteNumber);
+                System.out.println("[SERVER] Failed to sent file : " + fileName + " to Client " + clientNumber);
             }
 
         } catch (IOException e) {
             System.err.println("[SERVER] Error while sending file: " + e.getMessage());
-        } catch (NoSuchAlgorithmException e) {
-            System.err.println("[SERVER] Error calculating hash: " + e.getMessage());
         }
     }
 
@@ -134,7 +176,7 @@ class ClientHandler extends Thread {
         try {
             return objectMapper.writeValueAsString(list);
         } catch (JsonProcessingException e) {
-            System.out.println("Error while processing list request");
+            System.out.println("[SERVER] Error while processing list request: " + e.getMessage());
             return "-";
         }
     }
@@ -149,36 +191,42 @@ class ClientHandler extends Thread {
             while (true) {
 
                 JsonNode jsonNode = objectMapper.readTree(in.readUTF());
-                command = jsonNode.get("command").asText().toUpperCase();
+                command = jsonNode.get("command").asText();
                 fileName = jsonNode.has("file") ? jsonNode.get("file").asText() : " ";
                 hash = jsonNode.has("hash") ? jsonNode.get("hash").asText() : " ";
 
                 switch (command) {
-                    case "LIST":
+                    case "list":
                         out.writeUTF(listFiles());
                         break;
-                    case "PUT":
+                    case "put":
                         receiveFile(fileName, hash);
                         break;
-                    case "GET":
+                    case "get":
                         sendFile(fileName);
                         break;
-                    case "EXIT":
-                        System.out.println("[SERVER] Client " + clienteNumber + " disconnected");
+                    case "exit":
+                        System.out.println("[SERVER] Client " + clientNumber + " disconnected");
                         break;
                 }
 
-                if (command.equals("EXIT")) {
+                if (command.equals("exit")) {
                     break;
                 }
             }
 
-            in.close();
-            out.close();
-            socket.close();
-
+        } catch (JsonProcessingException e) {
+            System.out.println("[SERVER] Error trying to process a Json: " + e.getMessage());
         } catch (IOException e) {
-            System.out.println(e);
+            System.out.println("[SERVER] Error in establishing a conection: " + e.getMessage());
+        } finally {
+            try {
+                in.close();
+                out.close();
+                socket.close();
+            } catch (IOException e) {
+                System.out.println("[SERVER] Error in closing resources: " + e.getMessage());
+            }
         }
     }
 }

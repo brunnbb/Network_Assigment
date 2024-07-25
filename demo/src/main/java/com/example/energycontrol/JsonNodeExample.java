@@ -1,4 +1,4 @@
-package com.example.fileserver;
+package com.example.energycontrol;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
