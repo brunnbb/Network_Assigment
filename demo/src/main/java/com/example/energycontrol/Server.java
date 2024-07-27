@@ -15,7 +15,8 @@ public class Server {
     static final int PORT = 9876;
 
     public static void main(String[] args) {
-        try (DatagramSocket socket = new DatagramSocket(PORT, InetAddress.getByName("0.0.0.0"))) {
+        // InetAddress.getByName("0.0.0.0")
+        try (DatagramSocket socket = new DatagramSocket(PORT)) {
             System.out.println("Server is running and waiting for messages...");
 
             ObjectMapper mapper = new ObjectMapper();
@@ -43,6 +44,10 @@ public class Server {
                 String value = messageNode.has("value") ? messageNode.get("value").asText() : " ";
                 InetAddress clientAddress = receivePacket.getAddress();
                 int clientPort = receivePacket.getPort();
+
+                System.out.println(command);
+                System.out.println(locate);
+                System.out.println(value);
 
                 JsonNode responseNode;
                 String response;
@@ -77,17 +82,8 @@ public class Server {
                         response = mapper.writeValueAsString(responseNode);
                         msg = response.getBytes();
 
-                        packet = new DatagramPacket(msg, msg.length, clientAddress, clientPort);
-                        socket.send(packet);
+                        System.out.println(response);
 
-                        break;
-                    case "get-all":
-                        responseNode = mapper.createObjectNode();
-                        for (String key : hashmap.keySet()) {
-                            ((ObjectNode) responseNode).put(key, hashmap.get(key));
-                        }
-                        response = mapper.writeValueAsString(responseNode);
-                        msg = response.getBytes();
                         packet = new DatagramPacket(msg, msg.length, clientAddress, clientPort);
                         socket.send(packet);
 
