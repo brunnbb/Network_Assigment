@@ -32,16 +32,14 @@ public class Server {
                 socket.receive(receivePacket);
                 String message = new String(receivePacket.getData(), 0, receivePacket.getLength());
 
+                System.out.println("Server received: " + message);
+
                 JsonNode messageNode = mapper.readTree(message);
                 String command = messageNode.get("command").asText();
                 String locate = messageNode.get("locate").asText();
                 String value = messageNode.has("value") ? messageNode.get("value").asText() : " ";
                 InetAddress clientAddress = receivePacket.getAddress();
                 int clientPort = receivePacket.getPort();
-
-                System.out.println(command);
-                System.out.println(locate);
-                System.out.println(value);
 
                 JsonNode responseNode;
                 String response;
@@ -63,6 +61,8 @@ public class Server {
                         response = mapper.writeValueAsString(responseNode);
                         msg = response.getBytes();
 
+                        System.out.println("Server responded with: " + response);
+
                         packet = new DatagramPacket(msg, msg.length, clientAddress, clientPort);
                         socket.send(packet);
 
@@ -76,18 +76,23 @@ public class Server {
                         response = mapper.writeValueAsString(responseNode);
                         msg = response.getBytes();
 
-                        System.out.println(response);
+                        System.out.println("Server responded with: " + response);
 
                         packet = new DatagramPacket(msg, msg.length, clientAddress, clientPort);
                         socket.send(packet);
 
                         break;
                     default:
+                        // The client cannot properly answer this command yet
+                        // Must implement proper answer later
                         System.out.println("Unknown command/location");
 
                         responseNode = mapper.createObjectNode().put("error", "Unknown  command/location");
                         response = mapper.writeValueAsString(responseNode);
                         msg = response.getBytes();
+
+                        System.out.println("Server responded with: " + response);
+
                         packet = new DatagramPacket(msg, msg.length, clientAddress, clientPort);
                         socket.send(packet);
 

@@ -11,34 +11,22 @@ import com.fasterxml.jackson.databind.*;
 
 public class Client {
     static final int SERVER_PORT = 9876;
+    // Change to a proper IPv4 to communicate with other computers in the same LAN
     static final String SERVER_ADDRESS = "localhost";
+    private static final int MAX_ATTEMPTS = 4;
+    private static final Color BACKGROUND_COLOR = new Color(151, 158, 200);
+    private static final int TIMER_DELAY = 2000; // Timeout for socket to receive an answer
     static HashMap<String, String> hashmap;
     static ObjectMapper mapper;
     static Timer timer;
 
     public static void main(String[] args) {
-        // Reference map
+        // Initialize mapper and hashmap
         mapper = new ObjectMapper();
-        hashmap = new HashMap<>();
-        hashmap.put("luz_guarita", "off");
-        hashmap.put("ar_guarita", "off");
-        hashmap.put("luz_estacionamento", "off");
-        hashmap.put("luz_galpao_externo", "off");
-        hashmap.put("luz_galpao_interno", "off");
-        hashmap.put("luz_escritorios", "off");
-        hashmap.put("ar_escritorios", "off");
-        hashmap.put("luz_sala_reunioes", "off");
-        hashmap.put("ar_sala_reunioes", "off");
+        initializeHashmap();
 
-        // Frame
-        JFrame frame = new JFrame("Energy control");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(950, 500);
-        frame.setLayout(null);
-        frame.getContentPane().setBackground(new Color(151, 158, 200));
-        frame.setLocationRelativeTo(null);
-        frame.setResizable(false);
-
+        // Setup
+        JFrame frame = createFrame();
         JPanel middlePanel = createMiddlePanel();
         JPanel timer = createTimer(middlePanel);
         JPanel buttons = createBottomButtons(middlePanel);
@@ -50,35 +38,53 @@ public class Client {
 
     }
 
+    private static void initializeHashmap() {
+        hashmap = new HashMap<>();
+        hashmap.put("luz_guarita", "off");
+        hashmap.put("ar_guarita", "off");
+        hashmap.put("luz_estacionamento", "off");
+        hashmap.put("luz_galpao_externo", "off");
+        hashmap.put("luz_galpao_interno", "off");
+        hashmap.put("luz_escritorios", "off");
+        hashmap.put("ar_escritorios", "off");
+        hashmap.put("luz_sala_reunioes", "off");
+        hashmap.put("ar_sala_reunioes", "off");
+    }
+
+    public static JFrame createFrame() {
+        JFrame frame = new JFrame("Energy control");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(950, 500);
+        frame.setLayout(null);
+        frame.getContentPane().setBackground(BACKGROUND_COLOR);
+        frame.setLocationRelativeTo(null);
+        frame.setResizable(false);
+        return frame;
+    }
+
+    private static JButton createButton(String text) {
+        JButton button = new JButton(text);
+        button.setPreferredSize(new Dimension(150, 40));
+        button.setFocusable(false);
+        return button;
+    }
+
     public static JPanel createTimer(JPanel middlePanel) {
         JPanel panel = new JPanel();
-        panel.setBackground(new Color(151, 158, 200));
+        panel.setBackground(BACKGROUND_COLOR);
         panel.setBounds(30, 40, 470, 50);
         panel.setOpaque(true);
 
-        JButton timerButton = new JButton("Start Timer");
-        timerButton.setPreferredSize(new Dimension(150, 40));
-        timerButton.setFocusable(false);
-
-        JButton stopTimerButton = new JButton("Stop Timer");
-        stopTimerButton.setPreferredSize(new Dimension(150, 40));
-        stopTimerButton.setFocusable(false);
+        JButton timerButton = createButton("Start Timer");
+        JButton stopTimerButton = createButton("Stop Timer");
         stopTimerButton.setEnabled(false);
+        JButton getAllButton = createButton("Get all status");
 
-        JButton getAllButton = new JButton("Get all status");
-        getAllButton.setPreferredSize(new Dimension(150, 40));
-        getAllButton.setFocusable(false);
-
+        // How the start timer button reacts
         timerButton.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-
-                if (timer != null) {
-                    timer.cancel();
-                }
-
-                timer = new Timer();
 
                 String input = JOptionPane.showInputDialog(null, "Define timer rate (in seconds)", "Timer", -1);
                 if (input == null || input.isEmpty()) {
@@ -89,14 +95,23 @@ public class Client {
 
                 try {
                     int value = Integer.parseInt(input);
-                    if (value < 0) {
+                    // Zero, negative numbers or letters are not valid parameters
+                    if (value <= 0) {
                         throw new NumberFormatException();
                     }
+
+                    // If the timer was already set, this will stop it since a new valid value
+                    // exists
+                    if (timer != null) {
+                        timer.cancel();
+                    }
+
+                    timer = new Timer();
 
                     TimerTask task = new TimerTask() {
                         @Override
                         public void run() {
-                            System.out.println(value);
+                            System.out.println("Timer rate: " + value);
                             for (String item : hashmap.keySet()) {
                                 getStatus(item, middlePanel);
                             }
@@ -107,22 +122,26 @@ public class Client {
                     stopTimerButton.setEnabled(true);
 
                 } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(null, "The rate needs to be a posite number", "Error",
+                    JOptionPane.showMessageDialog(null, "The rate needs to be a positive number", "Error",
                             JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
 
+        // How the stop timer button reacts
         stopTimerButton.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                timer.cancel();
+                if (timer != null) {
+                    timer.cancel();
+                }
                 stopTimerButton.setEnabled(false);
             }
 
         });
 
+        // How the get all button reacts
         getAllButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -138,6 +157,14 @@ public class Client {
         return panel;
     }
 
+    private static JRadioButton createRadioButton(String text, String actionCommand) {
+        JRadioButton radioButton = new JRadioButton(text);
+        radioButton.setFocusable(false);
+        radioButton.setEnabled(false);
+        radioButton.setActionCommand(actionCommand);
+        return radioButton;
+    }
+
     public static JPanel createMiddlePanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new GridLayout(3, 3, 10, 10));
@@ -147,14 +174,8 @@ public class Client {
             ButtonGroup buttonGroup = new ButtonGroup();
             JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             JLabel label = new JLabel(key);
-            JRadioButton onButton = new JRadioButton("On");
-            JRadioButton offButton = new JRadioButton("Off");
-            onButton.setFocusable(false);
-            offButton.setFocusable(false);
-            onButton.setEnabled(false);
-            offButton.setEnabled(false);
-            onButton.setActionCommand("on");
-            offButton.setActionCommand("off");
+            JRadioButton onButton = createRadioButton("On", "on");
+            JRadioButton offButton = createRadioButton("Off", "off");
             buttonGroup.add(onButton);
             buttonGroup.add(offButton);
 
@@ -175,27 +196,15 @@ public class Client {
 
     public static JPanel createBottomButtons(JPanel middlePanel) {
         JPanel panel = new JPanel();
-        panel.setBackground(new Color(151, 158, 200));
+        panel.setBackground(BACKGROUND_COLOR);
         panel.setBounds(30, 370, 460, 50);
         panel.setOpaque(true);
 
-        JButton set = new JButton("Change status");
-        set.setPreferredSize(new Dimension(150, 40));
-        set.setFocusable(false);
+        JButton setButton = createButton("Change status");
+        JButton getButton = createButton("Get status");
+        JComboBox<String> comboBox = new JComboBox<>(hashmap.keySet().toArray(new String[0]));
 
-        JButton get = new JButton("Get status");
-        get.setPreferredSize(new Dimension(150, 40));
-        get.setFocusable(false);
-
-        String[] list = new String[9];
-        int i = 0;
-        for (String item : hashmap.keySet()) {
-            list[i] = item;
-            i++;
-        }
-        JComboBox<String> comboBox = new JComboBox<String>(list);
-
-        set.addActionListener(new ActionListener() {
+        setButton.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -208,7 +217,7 @@ public class Client {
 
         });
 
-        get.addActionListener(new ActionListener() {
+        getButton.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -219,8 +228,8 @@ public class Client {
 
         });
 
-        panel.add(set);
-        panel.add(get);
+        panel.add(setButton);
+        panel.add(getButton);
         panel.add(comboBox);
 
         return panel;
@@ -244,6 +253,7 @@ public class Client {
     }
 
     public static void getStatus(String locate, JPanel middlePanel) {
+
         try (DatagramSocket socket = new DatagramSocket()) {
             JsonNode messageNode = mapper.createObjectNode()
                     .put("command", "get")
@@ -251,45 +261,72 @@ public class Client {
             byte[] sendData = mapper.writeValueAsString(messageNode).getBytes();
             InetAddress serverAddress = InetAddress.getByName(SERVER_ADDRESS);
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, SERVER_PORT);
-            socket.send(sendPacket);
+            boolean responseReceived = false;
 
-            // To receive server response
-            byte[] receiveData = new byte[1024];
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            socket.receive(receivePacket);
-            String response = new String(receivePacket.getData(), 0, receivePacket.getLength());
-            JsonNode responseNode = mapper.readTree(response);
-            String status = responseNode.get("status").asText();
+            for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                try {
+                    // To send packet
+                    socket.send(sendPacket);
 
-            // Updates GUI
-            updateStatusRadioButtons(locate, status, middlePanel);
+                    // To receive server response
+                    byte[] receiveData = new byte[1024];
+                    DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+
+                    socket.setSoTimeout(TIMER_DELAY); // 2 seconds
+
+                    socket.receive(receivePacket);
+                    String response = new String(receivePacket.getData(), 0, receivePacket.getLength());
+                    JsonNode responseNode = mapper.readTree(response);
+                    String status = responseNode.get("status").asText();
+                    responseReceived = true;
+
+                    // Updates GUI
+                    updateStatusRadioButtons(locate, status, middlePanel);
+                    return; // Answer receives, leave the function
+
+                } catch (SocketTimeoutException e) {
+                    System.out.println("No answer received from server");
+                } catch (IOException e) {
+                    JOptionPane.showMessageDialog(null, "I/O error: " + e.getMessage(), "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+
+            if (!responseReceived) {
+                JOptionPane.showMessageDialog(null, "The server did not respond after " + MAX_ATTEMPTS + " attempts.",
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
 
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // Magia negra
+    // "Man writes worst function ever, asked to leave programming"
+    // Update the status of radio buttons based on the given location and status
     public static void updateStatusRadioButtons(String locate, String status, JPanel middlePanel) {
-        // Itera sobre os componentes do painel principal
+        // Iterate over all components in the main panel
         for (Component component : middlePanel.getComponents()) {
-            // Verifica se o componente é um JPanel
+            // Check if the component is a JPanel
             if (component instanceof JPanel) {
                 JPanel statusPanel = (JPanel) component;
-                // Itera sobre os componentes do painel de status
+                // Iterate over all components in the status panel
                 for (Component subComponent : statusPanel.getComponents()) {
+                    // Check if the component is a JLabel
                     if (subComponent instanceof JLabel) {
                         JLabel label = (JLabel) subComponent;
-                        // Verifica se o JLabel contém o texto correspondente à localização
+                        // Check if the JLabel's text matches the location
                         if (label.getText().equals(locate)) {
-                            // Itera sobre os componentes do painel de status para encontrar os JRadioButton
+                            // Iterate over all components in the status panel to find JRadioButtons
                             for (Component radioComponent : statusPanel.getComponents()) {
                                 if (radioComponent instanceof JRadioButton) {
                                     JRadioButton radioButton = (JRadioButton) radioComponent;
-                                    // Atualiza o estado dos JRadioButtons com base no status
+                                    // Update the state of the JRadioButtons based on the status
                                     if (radioButton.getActionCommand().equals(status)) {
+                                        // Select the radio button if status matches
                                         radioButton.setSelected(true);
                                     } else {
+                                        // Deselect the radio button if status does not match
                                         radioButton.setSelected(false);
                                     }
                                 }
