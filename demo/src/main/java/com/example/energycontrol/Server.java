@@ -1,15 +1,9 @@
 package com.example.energycontrol;
 
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.util.HashMap;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.*;
+import java.io.*;
+import java.net.*;
+import com.fasterxml.jackson.databind.*;
 
 public class Server {
     static final int PORT = 9876;

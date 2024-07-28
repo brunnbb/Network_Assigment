@@ -1,12 +1,12 @@
 package com.example.energycontrol;
 
 import java.util.*;
+import java.util.Timer;
 import java.io.*;
 import java.net.*;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import com.fasterxml.jackson.databind.*;
 
 public class Client {
@@ -14,6 +14,7 @@ public class Client {
     static final String SERVER_ADDRESS = "localhost";
     static HashMap<String, String> hashmap;
     static ObjectMapper mapper;
+    static Timer timer;
 
     public static void main(String[] args) {
         // Reference map
@@ -45,36 +46,94 @@ public class Client {
         frame.add(timer);
         frame.add(middlePanel);
         frame.add(buttons);
-        // frame.getContentPane().setBackground(new Color(151, 158, 180));
         frame.setVisible(true);
 
     }
 
     public static JPanel createTimer(JPanel middlePanel) {
-        // TO FINISH LATER, NOT NOW
         JPanel panel = new JPanel();
-        panel.setBounds(30, 40, 315, 50);
+        panel.setBackground(new Color(151, 158, 200));
+        panel.setBounds(30, 40, 470, 50);
         panel.setOpaque(true);
 
-        JButton timerButton = new JButton("Timer");
+        JButton timerButton = new JButton("Start Timer");
         timerButton.setPreferredSize(new Dimension(150, 40));
         timerButton.setFocusable(false);
+
+        JButton stopTimerButton = new JButton("Stop Timer");
+        stopTimerButton.setPreferredSize(new Dimension(150, 40));
+        stopTimerButton.setFocusable(false);
+        stopTimerButton.setEnabled(false);
 
         JButton getAllButton = new JButton("Get all status");
         getAllButton.setPreferredSize(new Dimension(150, 40));
         getAllButton.setFocusable(false);
-        getAllButton.addActionListener(new ActionListener() {
 
+        timerButton.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+
+                if (timer != null) {
+                    timer.cancel();
+                }
+
+                timer = new Timer();
+
+                String input = JOptionPane.showInputDialog(null, "Define timer rate (in seconds)", "Timer", -1);
+                if (input == null || input.isEmpty()) {
+                    JOptionPane.showMessageDialog(null, "The rate cannot be empty", "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                try {
+                    int value = Integer.parseInt(input);
+                    if (value < 0) {
+                        throw new NumberFormatException();
+                    }
+
+                    TimerTask task = new TimerTask() {
+                        @Override
+                        public void run() {
+                            System.out.println(value);
+                            for (String item : hashmap.keySet()) {
+                                getStatus(item, middlePanel);
+                            }
+                        }
+                    };
+
+                    timer.scheduleAtFixedRate(task, value * 1000, value * 1000);
+                    stopTimerButton.setEnabled(true);
+
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(null, "The rate needs to be a posite number", "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+
+        stopTimerButton.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                timer.cancel();
+                stopTimerButton.setEnabled(false);
+            }
+
+        });
+
+        getAllButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 for (String item : hashmap.keySet()) {
                     getStatus(item, middlePanel);
                 }
             }
-
         });
 
         panel.add(timerButton);
+        panel.add(stopTimerButton);
         panel.add(getAllButton);
         return panel;
     }
@@ -99,7 +158,7 @@ public class Client {
             buttonGroup.add(onButton);
             buttonGroup.add(offButton);
 
-            // Default state
+            // Inicial default state
             if (hashmap.get(key).equals("on")) {
                 onButton.setSelected(true);
             } else {
@@ -116,7 +175,9 @@ public class Client {
 
     public static JPanel createBottomButtons(JPanel middlePanel) {
         JPanel panel = new JPanel();
+        panel.setBackground(new Color(151, 158, 200));
         panel.setBounds(30, 370, 460, 50);
+        panel.setOpaque(true);
 
         JButton set = new JButton("Change status");
         set.setPreferredSize(new Dimension(150, 40));
@@ -176,7 +237,7 @@ public class Client {
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, SERVER_PORT);
             socket.send(sendPacket);
 
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -192,7 +253,7 @@ public class Client {
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, SERVER_PORT);
             socket.send(sendPacket);
 
-            // Receber a resposta do servidor
+            // To receive server response
             byte[] receiveData = new byte[1024];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
@@ -200,9 +261,7 @@ public class Client {
             JsonNode responseNode = mapper.readTree(response);
             String status = responseNode.get("status").asText();
 
-            System.out.println(response);
-
-            // Atualizar a interface gráfica
+            // Updates GUI
             updateStatusRadioButtons(locate, status, middlePanel);
 
         } catch (IOException ex) {
@@ -217,7 +276,6 @@ public class Client {
             // Verifica se o componente é um JPanel
             if (component instanceof JPanel) {
                 JPanel statusPanel = (JPanel) component;
-
                 // Itera sobre os componentes do painel de status
                 for (Component subComponent : statusPanel.getComponents()) {
                     if (subComponent instanceof JLabel) {
