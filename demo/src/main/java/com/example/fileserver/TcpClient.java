@@ -49,7 +49,7 @@ public class TcpClient {
                         out.flush();
                         break;
                     default:
-                        System.out.println("Choose: Unknown command");
+                        System.out.println("Chose: Unknown command");
                         break;
                 }
 
