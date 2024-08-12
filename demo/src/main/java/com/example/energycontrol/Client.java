@@ -10,22 +10,19 @@ import java.awt.event.*;
 import com.fasterxml.jackson.databind.*;
 
 public class Client {
-    static final int SERVER_PORT = 9876;
-    // Change to a proper IPv4 to communicate with other computers in the same LAN
-    static final String SERVER_ADDRESS = "localhost";
+    private static final int SERVER_PORT = 49300;
+    private static final String SERVER_ADDRESS = "localhost";
     private static final int MAX_ATTEMPTS = 4;
     private static final Color BACKGROUND_COLOR = new Color(151, 158, 200);
-    private static final int TIMER_DELAY = 2000; // Timeout for socket to receive an answer
+    private static final int SOCKET_MAX_DELAY = 2000;
     static HashMap<String, String> hashmap;
     static ObjectMapper mapper;
     static Timer timer;
 
     public static void main(String[] args) {
-        // Initialize mapper and hashmap
         mapper = new ObjectMapper();
         initializeHashmap();
 
-        // Setup
         JFrame frame = createFrame();
         JPanel middlePanel = createMiddlePanel();
         JPanel timer = createTimer(middlePanel);
@@ -80,7 +77,6 @@ public class Client {
         stopTimerButton.setEnabled(false);
         JButton getAllButton = createButton("Get all status");
 
-        // How the start timer button reacts
         timerButton.addActionListener(new ActionListener() {
 
             @Override
@@ -95,13 +91,10 @@ public class Client {
 
                 try {
                     int value = Integer.parseInt(input);
-                    // Zero, negative numbers or letters are not valid parameters
                     if (value <= 0) {
                         throw new NumberFormatException();
                     }
 
-                    // If the timer was already set, this will stop it since a new valid value
-                    // exists
                     if (timer != null) {
                         timer.cancel();
                     }
@@ -128,7 +121,6 @@ public class Client {
             }
         });
 
-        // How the stop timer button reacts
         stopTimerButton.addActionListener(new ActionListener() {
 
             @Override
@@ -141,7 +133,6 @@ public class Client {
 
         });
 
-        // How the get all button reacts
         getAllButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -179,7 +170,6 @@ public class Client {
             buttonGroup.add(onButton);
             buttonGroup.add(offButton);
 
-            // Inicial default state
             if (hashmap.get(key).equals("on")) {
                 onButton.setSelected(true);
             } else {
@@ -265,14 +255,12 @@ public class Client {
 
             for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
                 try {
-                    // To send packet
                     socket.send(sendPacket);
 
-                    // To receive server response
                     byte[] receiveData = new byte[1024];
                     DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
 
-                    socket.setSoTimeout(TIMER_DELAY); // 2 seconds
+                    socket.setSoTimeout(SOCKET_MAX_DELAY);
 
                     socket.receive(receivePacket);
                     String response = new String(receivePacket.getData(), 0, receivePacket.getLength());
@@ -280,9 +268,8 @@ public class Client {
                     String status = responseNode.get("status").asText();
                     responseReceived = true;
 
-                    // Updates GUI
                     updateStatusRadioButtons(locate, status, middlePanel);
-                    return; // Answer receives, leave the function
+                    return;
 
                 } catch (SocketTimeoutException e) {
                     System.out.println("No answer received from server");
@@ -302,31 +289,20 @@ public class Client {
         }
     }
 
-    // "Man writes worst function ever, asked to leave programming"
-    // Update the status of radio buttons based on the given location and status
     public static void updateStatusRadioButtons(String locate, String status, JPanel middlePanel) {
-        // Iterate over all components in the main panel
         for (Component component : middlePanel.getComponents()) {
-            // Check if the component is a JPanel
             if (component instanceof JPanel) {
                 JPanel statusPanel = (JPanel) component;
-                // Iterate over all components in the status panel
                 for (Component subComponent : statusPanel.getComponents()) {
-                    // Check if the component is a JLabel
                     if (subComponent instanceof JLabel) {
                         JLabel label = (JLabel) subComponent;
-                        // Check if the JLabel's text matches the location
                         if (label.getText().equals(locate)) {
-                            // Iterate over all components in the status panel to find JRadioButtons
                             for (Component radioComponent : statusPanel.getComponents()) {
                                 if (radioComponent instanceof JRadioButton) {
                                     JRadioButton radioButton = (JRadioButton) radioComponent;
-                                    // Update the state of the JRadioButtons based on the status
                                     if (radioButton.getActionCommand().equals(status)) {
-                                        // Select the radio button if status matches
                                         radioButton.setSelected(true);
                                     } else {
-                                        // Deselect the radio button if status does not match
                                         radioButton.setSelected(false);
                                     }
                                 }

@@ -6,10 +6,9 @@ import java.net.*;
 import com.fasterxml.jackson.databind.*;
 
 public class Server {
-    static final int PORT = 9876;
+    static final int PORT = 49300;
 
     public static void main(String[] args) {
-        // InetAddress.getByName("0.0.0.0")
         try (DatagramSocket socket = new DatagramSocket(PORT)) {
             System.out.println("Server is running and waiting for messages...");
 
@@ -83,8 +82,6 @@ public class Server {
 
                         break;
                     default:
-                        // The client cannot properly answer this command yet
-                        // Must implement proper answer later
                         System.out.println("Unknown command/location");
 
                         responseNode = mapper.createObjectNode().put("error", "Unknown  command/location");
